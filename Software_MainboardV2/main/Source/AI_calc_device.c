@@ -18,7 +18,8 @@ device.c: GPIO, I2C, and other connectivity
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
-
+#include "nvs_flash.h"
+#include "nvs.h"
 
 #include "AI_calc_main.h"
 #include "AI_calc_device.h"
@@ -26,6 +27,8 @@ device.c: GPIO, I2C, and other connectivity
 #include "AI_calc_keypad.h"
 #include "AI_calc_battery.h"
 #include "AI_calc_sidedisplay.h"
+#include "AI_calc_network.h"
+#include "AI_calc_camera.h"
     
 
 
@@ -40,7 +43,7 @@ char* shutdown_text[MAIN_DISPLAY_ROWS] = {
     "===================="
 };
 
-
+static nvs_handle_t device_settings_handle;
 
 
 
@@ -63,6 +66,7 @@ static void gpios_init(void);
 static void gpios_set_default(void);
 static void free_gpios_init(void);
 
+static void nvs_init(void);
 static void nvs_get_device_infos(void);
 static void nvs_save_device_infos(void);
 
@@ -161,22 +165,56 @@ static void free_gpios_init(void){
     gpio_config(&freegpio_config);
 }
 
+static void nvs_init(void){
+
+    // Inits nvs for later use
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND){
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
+}
+
 static void nvs_get_device_infos(void){
 
     // Called during init sequence
-    // NVS not implemented yet
-    device.debug_mode = 1;
-    device.main_display_contrast = 50;
-    device.side_display_contrast = 200;
-    device.side_display_on = 1;
-    device.side_display_toggle_mode = 0;
+    // Open device namespace
+    ESP_ERROR_CHECK(nvs_open("device", NVS_READWRITE, &device_settings_handle));
+    if (nvs_get_u8(device_settings_handle,"debugmode",&device.debug_mode) != ESP_OK){
+        device.debug_mode = 1;  // default
+    }
+    if (nvs_get_u8(device_settings_handle,"maindis_contr",&device.main_display_contrast) != ESP_OK){
+        device.main_display_contrast = 50;  // default
+    }
+    if (nvs_get_u8(device_settings_handle,"sidedis_contr",&device.side_display_contrast) != ESP_OK){
+        device.side_display_contrast = 200;  // default
+    }
+    if (nvs_get_u8(device_settings_handle,"sidedis_on",&device.side_display_on) != ESP_OK){
+        device.side_display_on = 1;  // default
+    }
+    if (nvs_get_u8(device_settings_handle,"sidedis_toggle",&device.side_display_toggle_mode) != ESP_OK){
+        device.side_display_toggle_mode = 0;  // default
+    }
+    size_t name_length = sizeof(device.name);
+    if (nvs_get_str(device_settings_handle,"name",device.name,&name_length) != ESP_OK){
+        strcpy(device.name,"AIcalcFX87/991_HW201_SW200_Test");  // default
+    }
 }
 
 static void nvs_save_device_infos(void){
 
     // Save infos about device into NVS
     // Called upon shutdown
-    // NVS not implemented yet
+
+    // Error state not checked, if reading fails during next init default values are chosen
+    nvs_set_u8(device_settings_handle,"debugmode",device.debug_mode);
+    nvs_set_u8(device_settings_handle,"maindis_contr",device.main_display_contrast);
+    nvs_set_u8(device_settings_handle,"sidedis_contr",device.side_display_contrast);
+    nvs_set_u8(device_settings_handle,"sidedis_on",device.side_display_on);
+    nvs_set_u8(device_settings_handle,"sidedis_toggle",device.side_display_toggle_mode);
+    nvs_set_str(device_settings_handle,"name",device.name);
+    nvs_commit(device_settings_handle);
 }
 
 
@@ -188,7 +226,8 @@ static void nvs_save_device_infos(void){
 
 void powerlatch_shutdown(void){
 
-    // turns off device and informs user
+    // turns off device properly and informs user
+    nvs_save_device_infos();
     dogm204_print_screen(shutdown_text);
     vTaskDelay(pdMS_TO_TICKS(1000));
     gpio_set_level(ESP_N_POWERLATCH,1);
@@ -196,7 +235,7 @@ void powerlatch_shutdown(void){
 
 void powerlatch_shutdown_immediately(void){
 
-    // turns off device immediately and without warning
+    // turns off device 
     gpio_set_level(ESP_N_POWERLATCH,1);
 }
 
@@ -207,26 +246,28 @@ void device_init(void){
     free_gpios_init();
     gpios_set_default();
     // ADC and I2C
-    bms_temp_adc_init();
     i2c_bus_init();
     // Get device informations from NVS
     // before peripherals are initialized
+    nvs_init();
     nvs_get_device_infos();
     // Keypad and more GPIOs
     tca8418_init_keypad();
     tca8418_init_gpios();
-    // BMS
-    max17048init();
     // Main display
     dogm204_init();
-    // Check battery condition after initializing components
-    // that don't need much power)
-    vTaskDelay(pdMS_TO_TICKS(100));
-    if (!battery_boot_ok()){
-        powerlatch_shutdown();
-    }
     // Sidedisplay
     dep128064_init();
-
+    // BMS
+    uint8_t bms_initial_state = bms_init();
+    if (bms_initial_state != BMS_OK){
+        dogm204_print_error_screen(bms_error_strings[bms_initial_state],ERROR_SOURCE_BMS);
+        vTaskDelay(pdMS_TO_TICKS(500));
+        powerlatch_shutdown_immediately();
+    }
+    // Camera
+    camera_init();
+    // Wifi
+    wifi_init();
 }
 

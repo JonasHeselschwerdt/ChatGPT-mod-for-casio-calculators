@@ -23,7 +23,6 @@ maindisplay.h: Functions and variables to control text LCDs via I2C
 #include "AI_calc_device.h"
 #include "AI_calc_UI.h"
 #include "AI_calc_maindisplay.h"
-#include "AI_calc_device.h"
 
 
 
@@ -93,6 +92,7 @@ static const char animation_divider[] = {
 
 
 
+
 // Static function declarations
 
 // Base functions
@@ -112,6 +112,7 @@ static void dogm204_displaydata_to_string(char** screen_text, uint8_t* displayda
 static void dogm204_loading_screen_task_init(void);
 static void dogm204_advance_loading_screen(void);
 static void dogm204_loading_screen_task(void* arg);
+
 
 
 

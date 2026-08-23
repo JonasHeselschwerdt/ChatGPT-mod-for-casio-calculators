@@ -21,8 +21,8 @@ of https://github.com/olikraus/u8g2 into components/u8g2
 
 // Includes
 
-
-
+#include "AI_calc_battery.h"
+#include "AI_calc_network.h"
 
 
 
@@ -85,12 +85,12 @@ typedef struct{
     char battery_time_left[9];      // XXhYYmin
     uint8_t battery_connected;      // boolean
     uint8_t wifi_signal_waves;      // 0...3
-    char wifi_name[16];             // if longer put ... at back
+    char wifi_name[19];             // if longer put ... at back
     char ai_name[11];               // if longer put ... at back
     uint8_t api_provided;           // boolean
     char ai_model[11];              // if longer put ... at back
     char storage_used[10];          // XXX/YYYMB    (or GB if a SD card is added in the future)
-    char camera_state[4];              // boolean
+    char camera_state[4];           // boolean
 }status_screen_TypeDef;
 
 
@@ -106,6 +106,6 @@ void dep128064_power_toggle(void);
 void dep128064_clear_screen(void);
 void dep128064_start_screensaver(uint16_t advance_interval);
 void dep128064_end_screensaver(void);
-void dep128064_refresh_status_screen(void);
+void dep128064_refresh_status_screen(bms_typeDef* bms, wifi_manager_TypeDef* wifi);
 
 #endif

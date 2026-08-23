@@ -292,10 +292,21 @@ void update_pressed_keys(void){
     // Called when TCA8418 Interrupt happens, Updates the global array cur_pressed_keys
     // Adds a timestamp to newly pressed keys, Also sorts cur_pressed_keys 
     // cur_pressed_keys[0] -> oldest pressed key
-
     uint8_t keypad_FIFO[10] = {0,0,0,0,0,0,0,0,0,0};
     tca8418_get_key_FIFO(keypad_FIFO);
-    //ESP_LOGI("Debugging","KeypadFIFO 1:0x%x",keypad_FIFO[0]);     // use this debugging message to map the keypad codes
+    /*
+    ESP_LOGI("Debugging","KeypadFIFO 1:0x%x, 2:0x%x, 3:0x%x, 4:0x%x, 5:0x%x, 6:0x%x, 7:0x%x, 8:0x%x, 9:0x%x, 10:0x%x",
+        keypad_FIFO[0],
+        keypad_FIFO[1],
+        keypad_FIFO[2],
+        keypad_FIFO[3],
+        keypad_FIFO[4],
+        keypad_FIFO[5],
+        keypad_FIFO[6],
+        keypad_FIFO[7],
+        keypad_FIFO[8],
+        keypad_FIFO[9]);     // use this debugging message to map the keypad codes
+    */
     uint8_t FIFO_pressed_keys[10] = {0,0,0,0,0,0,0,0,0,0};
     uint8_t FIFO_released_keys[10] = {0,0,0,0,0,0,0,0,0,0};
     uint8_t list_pos = 0;
@@ -318,6 +329,23 @@ void update_pressed_keys(void){
             break;
         }
     }
+    // Add pressed keys into cur_pressed_keys, add timestamp
+    uint64_t press_time_ms = esp_timer_get_time() / 1000;
+    for (uint8_t i=0; i<10;i++){
+        if (FIFO_pressed_keys[i] != 0){
+            for (int z=0; z<10; z++){
+                if (compare_keys(&cur_pressed_keys[z],&no_key)){
+                    cur_pressed_keys[z] = Key_LUT[FIFO_pressed_keys[i]];
+                    cur_pressed_keys[z].press_timestamp = press_time_ms;
+                    break;
+                }
+            }
+        }
+        else{
+            // End of pressed key list
+            break;
+        }
+    }
     // Delete released keys from cur_pressed_keys, close gap
     for (uint8_t i=0; i<10; i++){
         if (FIFO_released_keys[i] != 0){
@@ -336,23 +364,6 @@ void update_pressed_keys(void){
         }
         else{
             // End of released key list
-            break;
-        }
-    }
-    // Add pressed keys into cur_pressed_keys, add timestamp
-    uint64_t press_time_ms = esp_timer_get_time() / 1000;
-    for (uint8_t i=0; i<10;i++){
-        if (FIFO_pressed_keys[i] != 0){
-            for (int z=0; z<10; z++){
-                if (compare_keys(&cur_pressed_keys[z],&no_key)){
-                    cur_pressed_keys[z] = Key_LUT[FIFO_pressed_keys[i]];
-                    cur_pressed_keys[z].press_timestamp = press_time_ms;
-                    break;
-                }
-            }
-        }
-        else{
-            // End of pressed key list
             break;
         }
     }

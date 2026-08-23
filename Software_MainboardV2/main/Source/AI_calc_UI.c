@@ -11,6 +11,10 @@ UI.c: UI-Functions and Variables
 
 // Includes
 
+#include "esp_littlefs.h"
+#include "esp_log.h"
+#include "esp_err.h"
+
 #include "AI_calc_UI.h"
 
 
@@ -24,6 +28,10 @@ UI_TypeDef UI = {
     .UI_mode = UI_MODE_SCRIBBLE
 };
 
+
+
+
+
 // Scribble Mode variables
 
 
@@ -32,7 +40,7 @@ UI_TypeDef UI = {
 
 
 
-// Answer Mode variables
+// Chatview Mode variables
 
 
 
@@ -42,17 +50,94 @@ UI_TypeDef UI = {
 
 // Menu Mode UI variables and constants
 
-char* const main_menu[8] = {
-    " Edit WIFI List     ",
-    " Edit OpenAI API Key",
-    " Enter Keypad Mode  ",
-    " Open File System   "
-    " GPT-Model Selection",
-    " Autooff-Timer      ",
-    " Factory Reset      ",
-    " Firmware Info      "
-};
 
+
+
+
+
+
+// Little FS variables
+
+
+
+
+
+
+
+// Static Scribble mode function declarations
+
+
+
+
+
+
+// Static Chatview Mode function declarations
+
+
+
+
+
+
+
+// Static Menu Mode function declarations
+
+
+
+
+
+
+
+// Static LittleFS function declarations
+
+static void littleFS_init(void);
+
+
+
+
+
+
+
+// Static Scribble mode functions
+
+
+
+
+
+
+// Static Chatview Mode functions
+
+
+
+
+
+
+
+// Static Menu Mode functions
+
+
+
+
+
+
+
+// Static LittleFS functions
+
+static void littleFS_init(void){
+
+    esp_vfs_littlefs_conf_t conf = {
+        .base_path = "/littlefs",       
+        .partition_label = "littlefs",  // see partitions.csv
+        .format_if_mount_failed = true
+    };
+    esp_err_t ret = esp_vfs_littlefs_register(&conf);
+    if (ret != ESP_OK) {
+        ESP_LOGE("LFS", "LittleFS mount failed: %s",esp_err_to_name(ret));
+        return;
+    }
+    size_t total = 0, used = 0;
+    esp_littlefs_info("littlefs", &total, &used);
+    ESP_LOGI("LFS", "LittleFS mounted: %d KB total, %d KB used", total / 1024, used / 1024);
+}
 
 
 
@@ -61,21 +146,16 @@ char* const main_menu[8] = {
 
 // Generic extern UI-Functions
 
+void UI_init(void){
+
+    littleFS_init();
+}
 
 
 
 
 
-
-// Scribble Mode functions
-
-
-
-
-
-
-
-// Answer Mode functions
+// Extern Scribble Mode functions
 
 
 
@@ -83,4 +163,21 @@ char* const main_menu[8] = {
 
 
 
-// Menu Mode functions
+// Extern Chatview Mode functions
+
+
+
+
+
+
+
+// Extern Menu Mode functions
+
+
+
+
+
+
+
+
+// Extern LittleFS functions

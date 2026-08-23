@@ -9,6 +9,14 @@ sidedisplay.h: Functions and variables to control the OLED screen (using U8G2 an
 
 */
 
+
+/*
+
+This Code uses the U8G2 library, to get it to compile paste the 'csrc' directory 
+of https://github.com/olikraus/u8g2 into components/u8g2
+
+*/
+
 // Includes 
 
 #include "u8g2.h"
@@ -22,13 +30,10 @@ sidedisplay.h: Functions and variables to control the OLED screen (using U8G2 an
 #include "AI_calc_sidedisplay.h"
 #include "AI_calc_device.h"
 #include "AI_calc_battery.h"
+#include "AI_Calc_network.h"
 
-/*
 
-This Code uses the U8G2 library, to get it to compile paste the 'csrc' directory 
-of https://github.com/olikraus/u8g2 into components/u8g2
 
-*/
 
 
 // Static function declarations
@@ -44,7 +49,7 @@ static void dep128064_screensaver_task(void* arg);
 static void dep128064_print_screensaver(void);
 static void advance_screensaver(void);
 
-static status_screen_TypeDef generate_status_screen(void);
+static void generate_status_screen_bms(status_screen_TypeDef* status_screen, bms_typeDef* bms);
 static void dep128064_print_status_screen(status_screen_TypeDef* status_screen);
 
 
@@ -83,6 +88,10 @@ static screensaver_TypeDef screensaver = {
     .size_y = 20
 };
 
+// Info screen (device status)
+
+static status_screen_TypeDef status_screen;
+
 // Lopaka generated screen data:
 
 // Battery icons (from low to full)
@@ -114,11 +123,9 @@ static const uint8_t image_robot_bits[] = {0x7e,0xff,0x81,0xa5,0x81,0xbd,0x81,0x
 
 // Wifi signal strenght from high to low
 static const uint8_t image_wifi3_3_bits[] = {0xfe,0x01,0x01,0x02,0xfc,0x00,0x02,0x01,0x78,0x00,0x84,0x00,0x30,0x00,0x30,0x00};
-static const uint8_t image_wifi2_3_bits[] = {0x1e,0x21,0x0c,0x0c};
-static const uint8_t image_wifi1_3_bits[] = {0x7e,0x81,0x3c,0x42,0x18,0x18};
+static const uint8_t image_wifi2_3_bits[] = {0x7e,0x81,0x3c,0x42,0x18,0x18};
+static const uint8_t image_wifi1_3_bits[] = {0x1e,0x21,0x0c,0x0c};
 static const uint8_t image_wifi0_3_bits[] = {0xfe,0x01,0x01,0x02,0xfc,0x00,0x02,0x01,0x78,0x00,0x80,0x0a,0x30,0x04,0x30,0x0a};
-static const uint8_t* wifi_icons[] = {image_wifi0_3_bits,image_wifi1_3_bits,image_wifi2_3_bits,image_wifi3_3_bits};
-
 
 
 
@@ -304,43 +311,68 @@ static void advance_screensaver(void){
     }
 }
 
-static status_screen_TypeDef generate_status_screen(void){
+static void generate_status_screen_bms(status_screen_TypeDef* status_screen, bms_typeDef* bms){
 
     // Create displaydata to show device status (doesnt print)
-    status_screen_TypeDef status_screen;
     // Battery state
-    status_screen.battery_bars = (bms.battery_percentage > 10)?((bms.battery_percentage / 20) + 1):0;
-    snprintf(status_screen.battery_percentage,(sizeof(status_screen.battery_percentage)),"%3u%%",bms.battery_percentage);
-    status_screen.status_charging = (bms.charger_state&BMS_CHARGER_PRESENT) != 0;
-    status_screen.battery_connected = (bms.charger_state&BMS_BAT_PRESENT) != 0;
-    status_screen.warning_low_bat = (bms.battery_percentage <= 10) != 0;
-    if ((bms.battery_crate <= 0) || (!(bms.charger_state&BMS_CHARGING))){
+    status_screen->battery_bars = (bms->battery_percentage > 10)?((bms->battery_percentage / 20) + 1):0;
+    snprintf(status_screen->battery_percentage,(sizeof(status_screen->battery_percentage)),"%3u%%",bms->battery_percentage);
+    status_screen->status_charging = (bms->charger_state&BMS_CHARGER_PRESENT) != 0;
+    status_screen->battery_connected = (bms->charger_state&BMS_BAT_PRESENT) != 0;
+    status_screen->warning_low_bat = (bms->battery_percentage <= 10) != 0;
+    if ((bms->battery_crate <= 0) || (!(bms->charger_state&BMS_CHARGING))){
         // Battery not charging, Crate takes a while to become negative, bms.charger_state changes immediately
         // If battery crate > -5%/h battery time left values are unrealistic, always assume at least -5%/h battery crate:
-        uint16_t total_mins_left =  (bms.battery_crate<-5000)
+        uint16_t total_mins_left =  (bms->battery_crate<-5000)
                                     ?
-                                    ((bms.battery_percentage*1000*60) / (bms.battery_crate*-1))
+                                    ((bms->battery_percentage*1000*60) / (bms->battery_crate*-1))
                                     :
-                                    (bms.battery_percentage*60/5);
-        snprintf(   status_screen.battery_time_left,
-                    sizeof(status_screen.battery_time_left),
+                                    (bms->battery_percentage*60/5);
+        snprintf(   status_screen->battery_time_left,
+                    sizeof(status_screen->battery_time_left),
                     "%2uh%2umin",
                     total_mins_left / 60,
                     total_mins_left % 60);
     }
     else{
         // Battery charging
-        strcpy(status_screen.battery_time_left,"Charging");
+        strcpy(status_screen->battery_time_left,"Charging");
     }
-    // Rest not implemented yet, assign random values for testing:
-    status_screen.wifi_signal_waves = 3;
-    strcpy(status_screen.wifi_name,"TestWifi67     ");
-    strcpy(status_screen.ai_name,"ChatGPT   ");
-    status_screen.api_provided = 0;
-    strcpy(status_screen.ai_model,"GPT 5.5   ");
-    strcpy(status_screen.storage_used," 67/ 67MB");
-    strcpy(status_screen.camera_state,"Off");
-    return status_screen;
+}
+
+static void generate_status_screen_wifi(status_screen_TypeDef* status_screen, wifi_manager_TypeDef* wifi){
+
+    if (!wifi->connected){
+        status_screen->wifi_signal_waves = 0;
+        strcpy(status_screen->wifi_name,"Not connected  ");
+    }
+    else{
+        if (wifi->wifi_rssi < -85){
+            status_screen->wifi_signal_waves = 1;
+        }
+        else if (wifi->wifi_rssi < -70){
+            status_screen->wifi_signal_waves = 2;
+        }
+        else{
+            status_screen->wifi_signal_waves = 3;
+        }
+        // Wifi name
+        if (strlen(wifi->connected_wifi.ssid) > 18){
+            // SSID too long
+            // Only a copy of SSID:
+            wifi->connected_wifi.ssid[16] = '.';
+            wifi->connected_wifi.ssid[17] = '.';
+            wifi->connected_wifi.ssid[18] = '.';
+            wifi->connected_wifi.ssid[19] = '\0';
+        }
+        strcpy(status_screen->wifi_name,wifi->connected_wifi.ssid);
+    }
+    // Rest not implemented yet: Assign default values
+    strcpy(status_screen->ai_name,"ChatGPT   ");
+    status_screen->api_provided = 0;
+    strcpy(status_screen->ai_model,"GPT 5.5   ");
+    strcpy(status_screen->storage_used," 67/ 67MB");
+    strcpy(status_screen->camera_state,"Off");
 }
 
 static void dep128064_print_status_screen(status_screen_TypeDef* status_screen){
@@ -362,7 +394,6 @@ static void dep128064_print_status_screen(status_screen_TypeDef* status_screen){
     u8g2_SetFont(&u8g2, u8g2_font_t0_11b_tr);
     if (status_screen->battery_connected){
         u8g2_DrawStr(&u8g2, 26, 9, status_screen->battery_percentage);
-        // Only for debugging
         u8g2_DrawXBM(&u8g2, 69, 1, 8, 8, image_clock_bits);
         u8g2_DrawStr(&u8g2, 79, 9, status_screen->battery_time_left);
     }
@@ -371,7 +402,18 @@ static void dep128064_print_status_screen(status_screen_TypeDef* status_screen){
         u8g2_DrawXBM(&u8g2, 52, 2, 10, 7, image_charging_icon_bits);
     }
     // Wifi sign
-    u8g2_DrawXBM(&u8g2, 3, 15, 10, 8, wifi_icons[status_screen->wifi_signal_waves]);
+    if (status_screen->wifi_signal_waves == 0){
+        u8g2_DrawXBM(&u8g2, 3, 15, 12, 8, image_wifi0_3_bits);
+    }
+    else if (status_screen->wifi_signal_waves == 1){
+        u8g2_DrawXBM(&u8g2, 5, 19, 6, 4, image_wifi1_3_bits);
+    }
+    else if (status_screen->wifi_signal_waves == 2){
+        u8g2_DrawXBM(&u8g2, 4, 17, 8, 6, image_wifi2_3_bits);
+    }
+    else{
+        u8g2_DrawXBM(&u8g2, 3, 15, 10, 8, image_wifi3_3_bits);
+    }
     // Wifi name
     u8g2_DrawStr(&u8g2, 16, 23, status_screen->wifi_name);
     // AI Name
@@ -476,10 +518,12 @@ void dep128064_end_screensaver(void){
     xEventGroupClearBits(screensaver_events,SCREENSAVER_ACTIVE_BIT);
 }
 
-void dep128064_refresh_status_screen(void){
+
+void dep128064_refresh_status_screen(bms_typeDef* bms,wifi_manager_TypeDef* wifi){
 
     if (device.side_display_on){
-        status_screen_TypeDef status_screen = generate_status_screen();
+        generate_status_screen_bms(&status_screen, bms);
+        generate_status_screen_wifi(&status_screen, wifi);
         dep128064_print_status_screen(&status_screen);
     }
 }

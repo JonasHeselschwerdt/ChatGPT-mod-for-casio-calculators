@@ -28,7 +28,10 @@ typedef struct{
     uint8_t side_display_contrast;      // 0...255
     uint8_t side_display_on;            // boolean, if 0: all dep128064_print() commands are disabled
     uint8_t side_display_toggle_mode;   // boolean, if 1: dep128064_power_toggle() works
+    char name[32];
 }device_TypeDef;
+
+
 
 
 
@@ -52,7 +55,7 @@ extern device_TypeDef device;
 
 #define SIDE_DISPLAY_N_RESET 18
 
-#define CAMERA_POWER_ENABLE 38
+#define CAMERA_POWER_ENABLE 38      // Rest of camera Pin defines in camera.h
 
 #define BMS_ADC_TEMP 3
 #define BMS_NTC_VOLTAGE_DIV_ACT 39
@@ -73,7 +76,7 @@ This is the case by default, don't change these!
 
 
 
-// Needed for some ADC operations
+// Needed for some ADC operations (in battery.c)
 
 #define GPIO_OUTPUT_HIGH_MV 3000        // Output high voltage of ESP32 GPIO
 
@@ -86,7 +89,6 @@ This is the case by default, don't change these!
 #define SDA 7
 #define SCL 15
 #define I2C_FREQ 400000             // in Hz, supported by all peripherals
-
 
 
 

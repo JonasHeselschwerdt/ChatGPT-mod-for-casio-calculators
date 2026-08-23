@@ -29,6 +29,8 @@ Accuracy of BMS is limited due to standard fuel gauge model of MAX17048 used
 #include "esp_adc/adc_cali_scheme.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_log.h"
 
 #include "AI_calc_battery.h"
 #include "AI_calc_keypad.h"
@@ -49,9 +51,18 @@ static adc_channel_t adc_channel;
 
 static uint8_t bmsStateLUT[16];
 
-// for battery state machine, allows connecting and disconnecting at runtime
-// while USB is plugged in
 static uint8_t max17048_init_flag = 0;  
+
+static bms_typeDef bms = {
+    .cell_millivolts = 0,
+    .cell_millidegrees = 0,
+    .battery_percentage = 0,
+    .battery_crate = 0,
+    .charger_state = 0
+};
+
+static EventGroupHandle_t battery_events;
+static TaskHandle_t battery_task_handle;
 
 
 
@@ -60,22 +71,21 @@ static uint8_t max17048_init_flag = 0;
 
 // Global variables
 
-bms_typeDef bms = {
-    .cell_millivolts = 0,
-    .cell_millidegrees = 0,
-    .battery_percentage = 0,
-    .battery_crate = 0,
-    .charger_state = 0
+char* bms_error_strings[5] = {
+    "                    ",
+    " TEMPERATURE ERROR  ",
+    " BAT SOC ERROR      ",
+    " BAT VOLTAGE ERROR  ",
+    " BMS INVALID STATE  "
 };
-
-
-
 
 
 
 // Static function declarations
 
 static void init_bms_state_LUT(void);
+static void bms_temp_adc_init(void);
+
 static int32_t bms_get_battery_temp(void);
 static uint8_t bms_get_charger_state(void);
 static int32_t bms_ntc_millivolts_to_millidegrees(int millivolts);
@@ -83,7 +93,7 @@ static int32_t bms_ntc_millivolts_to_millidegrees(int millivolts);
 static void max17048_write(uint8_t reg, uint16_t data);
 static void max17048_read(uint8_t reg, uint16_t* data);
 
-
+static uint8_t check_battery_condition(void);
 
 
 
@@ -203,16 +213,32 @@ static uint8_t bms_get_charger_state(void){
     return bmsStateLUT[bms_state];
 }
 
+static void bms_temp_adc_init(void){
 
+    ESP_ERROR_CHECK(adc_oneshot_io_to_channel(BMS_ADC_TEMP,&adc_unit,&adc_channel));
 
+    adc_oneshot_unit_init_cfg_t adc_init_config = {
+        .unit_id = adc_unit,
+        .ulp_mode = ADC_ULP_MODE_DISABLE,
+    };
+    ESP_ERROR_CHECK(adc_oneshot_new_unit(&adc_init_config, &adc1_handle));
 
+    adc_oneshot_chan_cfg_t adc_ch_config = {
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+        .atten = ADC_ATTEN_DB_12,
+    };
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle,adc_channel,&adc_ch_config));
 
+    adc_cali_curve_fitting_config_t cali_config = {
+        .unit_id = adc_unit,
+        .chan = adc_channel,
+        .atten = ADC_ATTEN_DB_12,
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+    };
+    ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config, &adc1_cali_handle));
+}
 
-
-
-// Exported functions
-
-void max17048init(void){
+static void max17048init(void){
 
     init_bms_state_LUT();
     i2c_device_config_t max17048_config = {
@@ -245,64 +271,11 @@ void max17048init(void){
     max17048_init_flag = 1;
 }
 
-uint8_t battery_boot_ok(void){
+static uint8_t check_battery_condition(void){
 
-    // Checks battery state during boot
-    // Check battery
-    if (get_battery_info() != ESP_OK) {
-        return 0;
-    }
-    if (!(bms.charger_state & BMS_BAT_PRESENT)){
-        // No need to check battery, is not connected
-        return 1;
-    }
-    // Check boot conditions
-    if ((bms.cell_millivolts > BMS_LOW_BAT_V_BOOT_INHIBIT) && (bms.battery_percentage > BMS_LOW_BAT_SOC_BOOT_INHIBIT)){
-        return 1;
-    }
-    dogm204_print_error_screen("CANT BOOT,CHARGE BAT",ERROR_SOURCE_BMS);
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    return 0;
-}
-
-void bms_temp_adc_init(void){
-
-    ESP_ERROR_CHECK(adc_oneshot_io_to_channel(BMS_ADC_TEMP,&adc_unit,&adc_channel));
-
-    adc_oneshot_unit_init_cfg_t adc_init_config = {
-        .unit_id = adc_unit,
-        .ulp_mode = ADC_ULP_MODE_DISABLE,
-    };
-    ESP_ERROR_CHECK(adc_oneshot_new_unit(&adc_init_config, &adc1_handle));
-
-    adc_oneshot_chan_cfg_t adc_ch_config = {
-        .bitwidth = ADC_BITWIDTH_DEFAULT,
-        .atten = ADC_ATTEN_DB_12,
-    };
-    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle,adc_channel,&adc_ch_config));
-
-    adc_cali_curve_fitting_config_t cali_config = {
-        .unit_id = adc_unit,
-        .chan = adc_channel,
-        .atten = ADC_ATTEN_DB_12,
-        .bitwidth = ADC_BITWIDTH_DEFAULT,
-    };
-    ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config, &adc1_cali_handle));
-}
-
-
-esp_err_t get_battery_info(void){
-
-    // Returns ESP_FAIL if something is wrong with the battery,
-    // Turn device off in this case
-
-    // Generic boolean infos:
     bms.charger_state = bms_get_charger_state();
     if (bms.charger_state & BMS_UNKNOWN){
-        // Unable to decode State Pins, invalid state
-        dogm204_print_error_screen("UNKNOWN STATE       ",ERROR_SOURCE_BMS);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        return ESP_FAIL;
+        return BMS_INVALID_STATE_ERROR;
     }
     // Check if battery is even connected
     if (!(bms.charger_state & BMS_BAT_PRESENT)){
@@ -314,7 +287,7 @@ esp_err_t get_battery_info(void){
         bms.cell_millidegrees = 0;
         bms.cell_millivolts = 0;
         bms.battery_crate = 0;
-        return ESP_OK;
+        return BMS_OK;
     }
     // Battery connected, check if Max17048 already initialized
     if (!max17048_init_flag){
@@ -339,9 +312,7 @@ esp_err_t get_battery_info(void){
     // Temperature
     bms.cell_millidegrees = bms_get_battery_temp();
     if (bms.cell_millidegrees > BMS_HIGH_TEMP_SHUTDOWN){
-        dogm204_print_error_screen("BATTERY TOO HOT     ",ERROR_SOURCE_BMS);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        return ESP_FAIL;
+        return BMS_TEMP_ERROR;
     }
     // Cell Voltage
     uint16_t vcell_content;
@@ -358,21 +329,39 @@ esp_err_t get_battery_info(void){
     else{
         // Invalid value
         bms.battery_percentage = 0;
-        dogm204_print_error_screen("INVALID SOC         ",ERROR_SOURCE_BMS);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        return ESP_FAIL;
+        return BMS_INVALID_STATE_ERROR;
     }
     if (bms.battery_percentage < BMS_LOW_BAT_SOC_SHUTDOWN){
-        dogm204_print_error_screen("BATTERY SOC TOO LOW ",ERROR_SOURCE_BMS);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        return ESP_FAIL;
+        return BMS_SOC_ERROR;
     }
     // Discharge/Charge rate
     int16_t crate_content;
     max17048_read(MAX_CRATE_REG,(uint16_t*)&crate_content);
     bms.battery_crate = crate_content * 208;           // 0.208% * LSB of  MAX_CRATE_REG = Crate
-    return ESP_OK;
+    return BMS_OK;
 }
+
+static void bms_monitoring_task(void *args){
+
+    // Monitors battery information continouosly
+    // Shuts down device if necessary
+    while(1){
+        xEventGroupWaitBits(battery_events,BMS_ACTIVE_BIT,pdFALSE,pdTRUE,portMAX_DELAY);
+        vTaskDelay(pdMS_TO_TICKS(BMS_CHECK_INTERVAL));
+        if (check_battery_condition() != ESP_OK){
+            powerlatch_shutdown_immediately();
+        }
+        // ESP_LOGI("BMS-Task","CV[mV]:%d|SOC:%d|TEMP:%d",bms.cell_millivolts,bms.battery_percentage,bms.cell_millidegrees);
+    }
+}
+
+
+
+
+
+
+
+// Exported functions
 
 void create_bms_info_screen(char** info_screen){
 
@@ -399,4 +388,25 @@ void create_bms_info_screen(char** info_screen){
         (char)DOGM204_BATTERY_SIGN,
         ((float)bms.battery_crate/1000)
     );
+}
+
+void get_bms_state(bms_typeDef* info_bms){
+
+    // Getter function for static bms variable
+    info_bms->cell_millivolts = bms.cell_millivolts;
+    info_bms->cell_millidegrees = bms.cell_millidegrees;         
+    info_bms->battery_percentage = bms.battery_percentage;        
+    info_bms->battery_crate = bms.battery_crate;             
+    info_bms->charger_state = bms.charger_state;
+}
+
+uint8_t bms_init(void){
+
+    bms_temp_adc_init();
+    max17048init();
+    // Init battery task
+    battery_events = xEventGroupCreate();
+    xTaskCreate(bms_monitoring_task,"BMS",2048,NULL,2,&battery_task_handle);
+    xEventGroupSetBits(battery_events,BMS_ACTIVE_BIT);
+    return (check_battery_condition());
 }

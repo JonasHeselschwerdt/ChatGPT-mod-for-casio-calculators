@@ -152,11 +152,6 @@ maindisplay.h: Settings for main display (text LCD)
 
 
 
-// Global variables
-
-extern uint8_t main_display_contrast;
-
-
 
 
 // Exported functions

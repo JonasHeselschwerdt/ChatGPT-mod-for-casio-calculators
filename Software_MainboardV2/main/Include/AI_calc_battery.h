@@ -36,10 +36,12 @@ typedef struct{
 
 
 
+
+
+
 // Global variables
 
-extern bms_typeDef bms;
-
+extern char* bms_error_strings[5];
 
 
 
@@ -86,9 +88,6 @@ extern bms_typeDef bms;
 
 // Battery Operation Limits
 
-#define BMS_LOW_BAT_SOC_BOOT_INHIBIT 5      // in %, below this SoC the device will not boot up
-#define BMS_LOW_BAT_V_BOOT_INHIBIT 3500     // below this Vbat in mV the device will not boot up
-
 #define BMS_HIGH_TEMP_SHUTDOWN 50000        // in m°C, above this cell temp the device shut down
 #define BMS_LOW_BAT_SOC_SHUTDOWN 5          // in %, below this SoC the device shuts down
 
@@ -111,19 +110,35 @@ extern bms_typeDef bms;
 
 
 
+
+
+// bms_init return values
+
+#define BMS_OK 0
+#define BMS_TEMP_ERROR 1
+#define BMS_SOC_ERROR 2
+#define BMS_CV_ERROR 3
+#define BMS_INVALID_STATE_ERROR 4
+
+
+
+
+
+
+// For BMS task
+
+#define BMS_ACTIVE_BIT BIT1
+#define BMS_CHECK_INTERVAL 5000     // in ms
+
+
+
+
+
+
 // Exported functions
 
-void max17048init(void);
-void bms_temp_adc_init(void);
-uint8_t battery_boot_ok(void);
+uint8_t bms_init(void);
 void create_bms_info_screen(char** info_screen);
-
-// Requires stable 3.3V rail if no USB is connected
-esp_err_t get_battery_info(void);
-
-
-
-
-
+void get_bms_state(bms_typeDef* bms);
 
 #endif

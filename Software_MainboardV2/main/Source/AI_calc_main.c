@@ -25,17 +25,33 @@ main.c: App_main
 #include "AI_calc_maindisplay.h"
 #include "AI_calc_battery.h"
 #include "AI_calc_sidedisplay.h"
+#include "AI_calc_network.h"
+#include "AI_calc_camera.h"
 
 
 
-
-// The code below is only for reference on how to use functions and variables
-// The UI is not ready yet
+/*
+Code below is only for debugging/demonstration. Currently implemented functions are:
+- Show screensaver on sidedisplay
+- Show messages/animations on maindisplay
+- Save wifi credentials and connect to wifi
+- Show device informations (Wifi and battery) on sidedisplay
+- Turn sidedisplay on/off
+- Adjust display contrasts (side & maindisplay)
+- Log pressed keys of keypad
+- Take pictures with camera and host them on a local http server
+- Adjust camera framesize and JPEG compression
+*/
 
 void app_main(void){
-
+    // In the device_init() -> wifi_init -> wifi_manager_task() -> wifi_event_handler() a
+    // http debug server for the camera is started
+    // Type the IPv4 of the device into a browser to look at the latest picture
     device_init();
-
+    UI_init();
+    // Camera settings
+    camera_set_jpeg_quality(6);
+    camera_set_framesize(QSXGA_2560_1920_PX);
     if(device.debug_mode){
         dep128064_start_screensaver(100);
         // Debuggincode start Display
@@ -53,6 +69,10 @@ void app_main(void){
             " @ElectrJonics on YT",
             "===================="
         };
+        // Save Wifi credentials
+        char test_ssid[] = "<Your SSID here>";
+        char test_password[] = "<Your Password here>";
+        wifi_add_login_credentials(test_ssid,test_password,0);
         dogm204_print_screen(debug_message);
         vTaskDelay(pdMS_TO_TICKS(2000));
         char* legal_notice[MAIN_DISPLAY_ROWS] = {
@@ -90,6 +110,7 @@ void app_main(void){
                 update_pressed_keys();
                 // Check shutdown condition
                 if ((cur_pressed_keys[0].special_function == KEY_SHIFT_SPECIAL_FUNC) && (cur_pressed_keys[1].special_function == KEY_MENU_SPECIAL_FUNC)){
+                    camera_end_debug_http_server();
                     vTaskDelay(pdMS_TO_TICKS(500));
                     powerlatch_shutdown();
                 }
@@ -105,21 +126,57 @@ void app_main(void){
                         line3,
                         line4
                     };
-                    if (get_battery_info() == ESP_FAIL){
-                        powerlatch_shutdown();
-                    }
                     create_bms_info_screen(info_screen);
+                    // New way of refreshing sidedisplay with getter functions (bms)
+                    bms_typeDef battery_info;
+                    get_bms_state(&battery_info);
+                    // Wifi
+                    wifi_manager_TypeDef wifi_info;
+                    get_wifi_state(&wifi_info);
+                    ESP_LOGI("Wifi name","%s",wifi_info.connected_wifi.ssid);
+                    dep128064_refresh_status_screen(&battery_info, &wifi_info);
                     char* explanation[MAIN_DISPLAY_ROWS] = {
                         "====================",
-                        " Printing battery   ",
+                        " Printing device    ",
                         " Information        ",
                         "===================="
                     };
                     dogm204_print_screen(explanation);
                     vTaskDelay(pdMS_TO_TICKS(2000));
-                    dep128064_refresh_status_screen();
                     dogm204_print_screen(info_screen);
                     vTaskDelay(pdMS_TO_TICKS(2000));
+                    strcpy(line1,"Connected to Wifi   ");
+                    strcpy(line4,"                    ");
+                    snprintf(line2,sizeof(line2),"%-20.20s",wifi_info.connected_wifi.ssid);
+                    snprintf(line3,sizeof(line3),"IP:%3u.%3u.%3u.%3u  ",wifi_info.IPv4[0],wifi_info.IPv4[1],wifi_info.IPv4[2],wifi_info.IPv4[3]);
+                    dogm204_print_screen(info_screen);
+                    vTaskDelay(pdMS_TO_TICKS(2000));
+                }
+                if (cur_pressed_keys[0].special_function == KEY_DOWN_SPECIAL_FUNC){
+                    device.side_display_contrast -= 10;
+                    ESP_LOGI("Device","Sidediscontr: %u",device.side_display_contrast);
+                    dep128064_set_contrast(device.side_display_contrast);
+                }
+                if (cur_pressed_keys[0].special_function == KEY_UP_SPECIAL_FUNC){
+                    device.side_display_contrast += 10;;
+                    ESP_LOGI("Device","Sidediscontr: %u",device.side_display_contrast);
+                    dep128064_set_contrast(device.side_display_contrast);
+                }
+                if (cur_pressed_keys[0].special_function == KEY_RIGHT_SPECIAL_FUNC){
+                    device.main_display_contrast += 3;
+                    ESP_LOGI("Device","Maindicontr: %u",device.main_display_contrast);
+                    dogm204_set_contrast(device.main_display_contrast);
+                }
+                if (cur_pressed_keys[0].special_function == KEY_LEFT_SPECIAL_FUNC){
+                    device.main_display_contrast -= 3;
+                    ESP_LOGI("Device","Maindicontr: %u",device.main_display_contrast);
+                    dogm204_set_contrast(device.main_display_contrast);
+                }
+                if (cur_pressed_keys[0].special_function == KEY_ENTER_SPECIAL_FUNC){
+                    device.side_display_toggle_mode = 1;
+                    dep128064_power_toggle();
+                    // Camera test
+                    camera_take_picture();
                 }
                 // Log pressed keys
                 uint64_t cur_time = esp_timer_get_time() / 1000;
