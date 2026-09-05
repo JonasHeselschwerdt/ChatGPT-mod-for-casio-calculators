@@ -7,6 +7,7 @@ idf_component_register(SRCS "Source/AI_calc_main.c"
                             "Source/AI_calc_battery.c"
                             "Source/AI_calc_network.c"
                             "Source/AI_calc_camera.c"
+                            "Source/AI_calc_LLMs.c"
                     INCLUDE_DIRS "Include"
                     REQUIRES driver
                     REQUIRES esp_timer
@@ -15,4 +16,7 @@ idf_component_register(SRCS "Source/AI_calc_main.c"
                     REQUIRES nvs_flash
                     REQUIRES esp_wifi
                     REQUIRES esp_psram
-                    REQUIRES esp_http_server)
+                    REQUIRES esp_http_server
+                    REQUIRES esp_http_client
+                    REQUIRES json
+                    REQUIRES mbedtls)

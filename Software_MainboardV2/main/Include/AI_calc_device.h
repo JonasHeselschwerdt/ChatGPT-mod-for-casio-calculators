@@ -27,8 +27,7 @@ typedef struct{
     uint8_t main_display_contrast;      // 0...63
     uint8_t side_display_contrast;      // 0...255
     uint8_t side_display_on;            // boolean, if 0: all dep128064_print() commands are disabled
-    uint8_t side_display_toggle_mode;   // boolean, if 1: dep128064_power_toggle() works
-    char name[32];
+    char name[32];                      // not used atm
 }device_TypeDef;
 
 
@@ -41,6 +40,8 @@ typedef struct{
 extern i2c_master_bus_handle_t i2c_bus;
 
 extern device_TypeDef device;
+
+
 
 
 

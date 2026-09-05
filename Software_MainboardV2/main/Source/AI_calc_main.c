@@ -27,32 +27,46 @@ main.c: App_main
 #include "AI_calc_sidedisplay.h"
 #include "AI_calc_network.h"
 #include "AI_calc_camera.h"
+#include "AI_calc_LLMs.h"
 
 
-
-/*
-Code below is only for debugging/demonstration. Currently implemented functions are:
-- Show screensaver on sidedisplay
-- Show messages/animations on maindisplay
-- Save wifi credentials and connect to wifi
-- Show device informations (Wifi and battery) on sidedisplay
-- Turn sidedisplay on/off
-- Adjust display contrasts (side & maindisplay)
-- Log pressed keys of keypad
-- Take pictures with camera and host them on a local http server
-- Adjust camera framesize and JPEG compression
-*/
 
 void app_main(void){
-    // In the device_init() -> wifi_init -> wifi_manager_task() -> wifi_event_handler() a
-    // http debug server for the camera is started
-    // Type the IPv4 of the device into a browser to look at the latest picture
+
     device_init();
     UI_init();
-    // Camera settings
-    camera_set_jpeg_quality(6);
-    camera_set_framesize(QSXGA_2560_1920_PX);
+    Key_TypeDef cur_pressed_keys[10];
+    for (uint8_t i=0; i<10; i++){
+        cur_pressed_keys[i] = no_key;
+    }
+
+    //Debugging for OpenAI API
+    char test_prompt1[SCRIBBLE_PAGE_LENGTH+1] = "I am debugging an AI calculator I designed right now, if there"
+                                                " are pictures appended in this prompt can you please try to explain what "
+                                                "you can see?";
+    char test_prompt2[SCRIBBLE_PAGE_LENGTH+1] = "Can you explain again what you saw in the picture of the last prompt?";
+
+    char test_answer[ANSWER_PAGE_LENGTH+1];
+
     if(device.debug_mode){
+
+        /*
+        Code below is only for debugging/demonstration. Currently implemented functions are:
+        - Show screensaver on sidedisplay
+        - Show messages/animations on maindisplay
+        - Save wifi credentials and connect to wifi
+        - Show device informations (Wifi and battery) on sidedisplay
+        - Turn sidedisplay on/off
+        - Adjust display contrasts (side & maindisplay)
+        - Log pressed keys of keypad
+        - Take pictures with camera and host them on a local http server (disabled atm)
+        - Adjust camera framesize and JPEG compression
+        - Send prompts and pictures to OpenAI responses API (Answer in ESP_LOG)
+        */
+
+        // Camera settings
+        camera_set_jpeg_quality(6);
+        camera_set_framesize(QSXGA_2560_1920_PX);
         dep128064_start_screensaver(100);
         // Debuggincode start Display
         char* debug_text[MAIN_DISPLAY_ROWS]={
@@ -62,6 +76,8 @@ void app_main(void){
             "                    "    
         };
         dogm204_print_screen(debug_text);
+        // Saving API Key (WARNING)
+        save_API_Key(AI_MODEL_OPENAI,"<Your OpenAI API key here>");
         vTaskDelay(pdMS_TO_TICKS(2000));
         char *debug_message[MAIN_DISPLAY_ROWS] = {
             "====================",
@@ -69,10 +85,10 @@ void app_main(void){
             " @ElectrJonics on YT",
             "===================="
         };
-        // Save Wifi credentials
+        // Save Wifi credentials (WARNING)
         char test_ssid[] = "<Your SSID here>";
-        char test_password[] = "<Your Password here>";
-        wifi_add_login_credentials(test_ssid,test_password,0);
+        char test_password[] = "<Your WIFI password here";
+        wifi_add_login_credentials(test_ssid,test_password,8);
         dogm204_print_screen(debug_message);
         vTaskDelay(pdMS_TO_TICKS(2000));
         char* legal_notice[MAIN_DISPLAY_ROWS] = {
@@ -107,10 +123,10 @@ void app_main(void){
         while(1){
             vTaskDelay(pdMS_TO_TICKS(UI_LOOP_DELAYTIME));
             if(!gpio_get_level(TCA8418_N_INTERRUPT)){
-                update_pressed_keys();
+                update_pressed_keys(cur_pressed_keys);
                 // Check shutdown condition
                 if ((cur_pressed_keys[0].special_function == KEY_SHIFT_SPECIAL_FUNC) && (cur_pressed_keys[1].special_function == KEY_MENU_SPECIAL_FUNC)){
-                    camera_end_debug_http_server();
+                    //camera_end_debug_http_server();
                     vTaskDelay(pdMS_TO_TICKS(500));
                     powerlatch_shutdown();
                 }
@@ -153,14 +169,28 @@ void app_main(void){
                     vTaskDelay(pdMS_TO_TICKS(2000));
                 }
                 if (cur_pressed_keys[0].special_function == KEY_DOWN_SPECIAL_FUNC){
-                    device.side_display_contrast -= 10;
-                    ESP_LOGI("Device","Sidediscontr: %u",device.side_display_contrast);
-                    dep128064_set_contrast(device.side_display_contrast);
+                    // OpenAI Responses API test, new chat
+                    char pictures[MAX_SAVED_PICTURES][64] = {0};
+                    size_t cam_dir_size;
+                    uint8_t pics;
+                    get_saved_pictures_paths(&cam_dir_size,&pics,pictures);
+                    for (uint8_t i=0; i<MAX_SAVED_PICTURES; i++){
+                        ESP_LOGI("Main","Picture%u: %s",i,pictures[i]);
+                    }
+                    start_openai_conversation(test_prompt1,test_answer,sizeof(test_answer),pictures,"gpt-5.5");
+                    ESP_LOGI("Main","Got answer: %s",test_answer);
                 }
                 if (cur_pressed_keys[0].special_function == KEY_UP_SPECIAL_FUNC){
-                    device.side_display_contrast += 10;;
-                    ESP_LOGI("Device","Sidediscontr: %u",device.side_display_contrast);
-                    dep128064_set_contrast(device.side_display_contrast);
+                    // OpenAI Responses API test, new prompt in previous chat
+                    char pictures[MAX_SAVED_PICTURES][64] = {0};
+                    size_t cam_dir_size;
+                    uint8_t pics;
+                    get_saved_pictures_paths(&cam_dir_size,&pics,pictures);
+                    for (uint8_t i=0; i<MAX_SAVED_PICTURES; i++){
+                        ESP_LOGI("Main","Picture%u: %s",i,pictures[i]);
+                    }
+                    get_openai_response(test_prompt2,test_answer,sizeof(test_answer),pictures,"gpt-5.5");
+                    ESP_LOGI("Main","Got answer: %s",test_answer);
                 }
                 if (cur_pressed_keys[0].special_function == KEY_RIGHT_SPECIAL_FUNC){
                     device.main_display_contrast += 3;
@@ -172,11 +202,13 @@ void app_main(void){
                     ESP_LOGI("Device","Maindicontr: %u",device.main_display_contrast);
                     dogm204_set_contrast(device.main_display_contrast);
                 }
-                if (cur_pressed_keys[0].special_function == KEY_ENTER_SPECIAL_FUNC){
-                    device.side_display_toggle_mode = 1;
-                    dep128064_power_toggle();
+                if (cur_pressed_keys[0].special_function == KEY_CAMERA_SPECIAL_FUNC){
                     // Camera test
+                    // Adds camera picture into littlefs/cam if possible
                     camera_take_picture();
+                }
+                if (cur_pressed_keys[0].special_function == KEY_ENTER_SPECIAL_FUNC){
+                    delete_camera_directory();
                 }
                 // Log pressed keys
                 uint64_t cur_time = esp_timer_get_time() / 1000;
@@ -194,5 +226,19 @@ void app_main(void){
     }
     else{
         // Device main loop
+        while(1){
+            vTaskDelay(pdMS_TO_TICKS(UI_LOOP_DELAYTIME));
+            if(!gpio_get_level(TCA8418_N_INTERRUPT)){
+                update_pressed_keys(cur_pressed_keys);
+                // The entire UI runs in:
+                UI_handle_pressed_keys(cur_pressed_keys);
+                /*
+                Parallel FreeRTOS Tasks:
+                - wifi_manager in network.c
+                - battery monitoring in battery.c
+                - autooff timer monitoring in UI.c (not implemented yet)
+                */
+            }
+        }
     }
 }

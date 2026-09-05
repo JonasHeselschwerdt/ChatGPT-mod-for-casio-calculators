@@ -488,6 +488,8 @@ void dep128064_power_ctrl(uint8_t display_on){
     }
 }
 
+/* Most likely not needed anymore:
+
 void dep128064_power_toggle(void){
 
     if (device.side_display_toggle_mode){
@@ -495,6 +497,8 @@ void dep128064_power_toggle(void){
         dep128064_power_ctrl(device.side_display_on);
     }
 }
+    
+*/
 
 void dep128064_start_screensaver(uint16_t advance_interval){
 

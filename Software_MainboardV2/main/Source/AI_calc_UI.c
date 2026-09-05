@@ -12,10 +12,12 @@ UI.c: UI-Functions and Variables
 // Includes
 
 #include "esp_littlefs.h"
+#include <sys/stat.h>
 #include "esp_log.h"
 #include "esp_err.h"
 
 #include "AI_calc_UI.h"
+#include "AI_calc_LLMs.h"
 
 
 
@@ -95,8 +97,6 @@ static void littleFS_init(void);
 
 
 
-
-
 // Static Scribble mode functions
 
 
@@ -137,9 +137,15 @@ static void littleFS_init(void){
     size_t total = 0, used = 0;
     esp_littlefs_info("littlefs", &total, &used);
     ESP_LOGI("LFS", "LittleFS mounted: %d KB total, %d KB used", total / 1024, used / 1024);
+
+    // Create all neccessary directories if they are not there yet
+    // To temporarily store JPGs:
+    mkdir("/littlefs/cam",0755);
+    // For chatdate of the AI conversations
+    mkdir("/littlefs/chat",0755);
+    // For saved texts (through file upload)
+    mkdir("/littlefs/savedtexts",0755);
 }
-
-
 
 
 
@@ -149,35 +155,12 @@ static void littleFS_init(void){
 void UI_init(void){
 
     littleFS_init();
+    llms_init();
+}
+
+void UI_handle_pressed_keys(Key_TypeDef* cur_pressed_keys){
+
+
 }
 
 
-
-
-
-// Extern Scribble Mode functions
-
-
-
-
-
-
-
-// Extern Chatview Mode functions
-
-
-
-
-
-
-
-// Extern Menu Mode functions
-
-
-
-
-
-
-
-
-// Extern LittleFS functions

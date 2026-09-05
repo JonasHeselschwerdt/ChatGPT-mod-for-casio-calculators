@@ -15,6 +15,8 @@ UI.h: UI-Settings, Variable Types, extern Variables and Functions
 // Includes
 
 #include "AI_calc_maindisplay.h"
+#include "AI_calc_LLMs.h"
+#include "AI_calc_keypad.h"
 
 #include <stdint.h>
 
@@ -63,7 +65,7 @@ UI.h: UI-Settings, Variable Types, extern Variables and Functions
 typedef enum{
     UI_MODE_SCRIBBLE,       // for typing in prompts
     UI_MODE_TEXTINPUT,      // for typing in passwords, API keys, etc. (from menu)
-    UI_MODE_CHATVIEW,       // for viewing previous conversations  
+    UI_MODE_CHATVIEW,       // for viewing AI conversations  
     UI_MODE_MENU,           // for changing settings, etc.
     UI_MODE_FILEVIEW        // viewing text files that have been saved to the device
 }UI_mode_TypeDef;
@@ -71,14 +73,13 @@ typedef enum{
 typedef struct{
     uint8_t autooff_tresh_mins;
     UI_mode_TypeDef UI_mode;
+    ai_model_TypeDef current_ai_model;
+    char model_version_string[32];
 }UI_TypeDef;
 
 
 
-typedef enum{
-    CHATVIEW_PROMPT,        // currently looking at prompt text
-    CHATVIEW_ANSWER         // currently looking at answer text
-} chatview_text_TypeDef;
+
 
 typedef struct menu_entry_TypeDef menu_entry_TypeDef;
 struct menu_entry_TypeDef{
@@ -119,10 +120,8 @@ typedef struct{
 } text_input_mode_typeDef;
 
 typedef struct{
-    char* prompt_texts[SCRIBBLE_PAGE_LENGTH + 1];           // +1 for String-terminator
-    char* anwer_texts[ANSWER_PAGE_LENGTH + 1];              // +1 for String-terminator
-    uint8_t current_chat_page_sector;
-    uint16_t current_chat;                                  // even = showing prompt, uneven = showing answer
+    uint16_t chat_position;
+    uint8_t show_response;      // boolean, if 0 show prompt toggle with XOR operation
 } chatview_mode_typeDef;
 
 typedef struct{
@@ -138,6 +137,16 @@ typedef struct{
 
 
 
+// Chatting restrictions
+
+#define MAX_CONVERSATION_LENGTH 20
+/*
+max amount of prompt / response ID pairs in the metadata
+After MAX_CONVERSATION_LENGTH text exchanges the user has to start a new chat!
+Flash memory needed in worst case = MAX_CONVERSATION_LENGTH * (ANSWER_PAGE_LENGTH + SCRIBBLE_PAGE_LENGTH)
+*/
+ 
+
 
 
 
@@ -151,6 +160,7 @@ extern UI_TypeDef UI;
 // Exported functions
 
 void UI_init(void);
+void UI_handle_pressed_keys(Key_TypeDef* cur_pressed_keys);
 
 
 

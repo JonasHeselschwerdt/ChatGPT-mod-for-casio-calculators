@@ -182,7 +182,7 @@ static void nvs_get_device_infos(void){
     // Open device namespace
     ESP_ERROR_CHECK(nvs_open("device", NVS_READWRITE, &device_settings_handle));
     if (nvs_get_u8(device_settings_handle,"debugmode",&device.debug_mode) != ESP_OK){
-        device.debug_mode = 1;  // default
+        device.debug_mode = 1;  // default atm, change later to 0
     }
     if (nvs_get_u8(device_settings_handle,"maindis_contr",&device.main_display_contrast) != ESP_OK){
         device.main_display_contrast = 50;  // default
@@ -192,9 +192,6 @@ static void nvs_get_device_infos(void){
     }
     if (nvs_get_u8(device_settings_handle,"sidedis_on",&device.side_display_on) != ESP_OK){
         device.side_display_on = 1;  // default
-    }
-    if (nvs_get_u8(device_settings_handle,"sidedis_toggle",&device.side_display_toggle_mode) != ESP_OK){
-        device.side_display_toggle_mode = 0;  // default
     }
     size_t name_length = sizeof(device.name);
     if (nvs_get_str(device_settings_handle,"name",device.name,&name_length) != ESP_OK){
@@ -212,7 +209,6 @@ static void nvs_save_device_infos(void){
     nvs_set_u8(device_settings_handle,"maindis_contr",device.main_display_contrast);
     nvs_set_u8(device_settings_handle,"sidedis_contr",device.side_display_contrast);
     nvs_set_u8(device_settings_handle,"sidedis_on",device.side_display_on);
-    nvs_set_u8(device_settings_handle,"sidedis_toggle",device.side_display_toggle_mode);
     nvs_set_str(device_settings_handle,"name",device.name);
     nvs_commit(device_settings_handle);
 }

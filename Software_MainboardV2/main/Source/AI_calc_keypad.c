@@ -32,7 +32,14 @@ keypad.c: Functions and variables to implement the TCA8418 via I2C
 static i2c_master_dev_handle_t tca8418_dev = NULL;
 
 static Key_TypeDef Key_LUT[128];     // 128 entries because EVENT_KEY_REG has 7 bit key-event-codes
-static Key_TypeDef no_key = {
+
+
+
+
+// Extern variables
+
+// Needed during initialization of cur_pressed_keys in main.c
+Key_TypeDef no_key = {
     .special_function = KEY_NOT_DEFINED,
     .normal_meaning = '\0',
     .shift_meaning = '\0',
@@ -41,13 +48,6 @@ static Key_TypeDef no_key = {
     .USB_meaning = '\0',
     .press_timestamp = 0             // ms timestamp
 };
-
-
-
-
-// Global Keypad variables
-
-Key_TypeDef cur_pressed_keys[10];
 
 
 
@@ -287,7 +287,7 @@ void tca8418_init_gpios(void){
     tca8418_gpio_set_mode(&bms_stat2_pin);
 }
 
-void update_pressed_keys(void){
+void update_pressed_keys(Key_TypeDef* cur_pressed_keys){
 
     // Called when TCA8418 Interrupt happens, Updates the global array cur_pressed_keys
     // Adds a timestamp to newly pressed keys, Also sorts cur_pressed_keys 

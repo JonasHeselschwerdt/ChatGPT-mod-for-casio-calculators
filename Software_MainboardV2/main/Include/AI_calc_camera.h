@@ -81,12 +81,38 @@ camera.h: Camera settings (using esp_camera component)
 
 
 
+// Flash memory restrictions
+
+#define PICTURES_MAX_TOTAL_SIZE (3*1024*1024)
+#define MAX_SAVED_PICTURES 4
+
+/*
+Important: Be very careful about changing PICTURES_MAX_TOTAL_SIZE
+Do not set higher than 4 MiB
+(only use 8MiB PSRAM models for this project)
+*/
+
+#if PICTURES_MAX_TOTAL_SIZE > (4*1024*1024)
+#error "Camera directory should not be that large"
+#endif
+
+
+
+
+
+
 
 // Exported functions
 
 void camera_init(void);
+
 esp_err_t camera_take_picture(void);
+esp_err_t delete_camera_directory(void);
+
 void camera_set_jpeg_quality(uint8_t jpeg_quality);
 void camera_set_framesize(uint8_t framesize_code);
+
+esp_err_t get_saved_pictures_paths(size_t* directory_size, uint8_t* file_cnt, char (*pic_paths)[64]);
+
 void camera_start_debug_http_server(void);      // Only for debugging
 void camera_end_debug_http_server(void);        // Only for debugging

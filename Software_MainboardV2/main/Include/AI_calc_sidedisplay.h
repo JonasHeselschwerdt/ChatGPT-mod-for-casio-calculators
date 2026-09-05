@@ -102,7 +102,7 @@ typedef struct{
 void dep128064_init(void);
 void dep128064_set_contrast(uint8_t contrast);
 void dep128064_power_ctrl(uint8_t display_on);
-void dep128064_power_toggle(void);
+// void dep128064_power_toggle(void);
 void dep128064_clear_screen(void);
 void dep128064_start_screensaver(uint16_t advance_interval);
 void dep128064_end_screensaver(void);

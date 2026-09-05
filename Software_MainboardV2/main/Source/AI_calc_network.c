@@ -23,6 +23,7 @@ network.h: Wifi manager code
 
 #include "AI_calc_network.h"
 #include "AI_calc_camera.h"     // Only for debugging
+#include "AI_calc_device.h"
 
 
 
@@ -205,8 +206,12 @@ static void wifi_event_handler(void *arg,esp_event_base_t event_base,int32_t eve
         wifi_manager.IPv4[1] = (event->ip_info.ip.addr >> 8) & 0xFF;
         wifi_manager.IPv4[2] = (event->ip_info.ip.addr >> 16) & 0xFF;
         wifi_manager.IPv4[3] = (event->ip_info.ip.addr >> 24) & 0xFF;
-        // Only for cameradebugging:
-        camera_start_debug_http_server();
+        // Only for cameradebugging: (I think I will remove this later idk)
+        /*
+        if (device.debug_mode){
+            camera_start_debug_http_server();
+        }
+        */
     }
 }
 
